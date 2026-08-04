@@ -73,12 +73,15 @@ def api_analyze(req: AnalyzeRequest):
     yt_api_key = os.getenv("YOUTUBE_API_KEY", "")
     ai_api_key = os.getenv("DEEPSEEK_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
+    if not yt_api_key or yt_api_key.startswith("YOUR_"):
+        raise HTTPException(status_code=400, detail="กรุณาตั้งค่า YOUTUBE_API_KEY ในไฟล์ .env หรือ Vercel Environment Variables")
+
     v_id = extract_video_id(video_url)
     real_video_title, channel_name, actual_comment_count = get_video_info(v_id, yt_api_key)
     raw_comments_data = get_comments(v_id, yt_api_key)
 
     if not raw_comments_data:
-        raise HTTPException(status_code=404, detail="No comments found or API error")
+        raise HTTPException(status_code=400, detail="ไม่พบความคิดเห็นในคลิปนี้ หรือ YOUTUBE_API_KEY ไม่ถูกต้อง / API Quota เต็ม")
 
     comments = [c["text"] for c in raw_comments_data]
     sentiment_counts = analyze_sentiment(comments)
