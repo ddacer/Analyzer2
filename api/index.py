@@ -1,4 +1,6 @@
 import os
+os.environ["PYTHAINLP_DATA_DIR"] = "/tmp/pythainlp-data"
+
 import sys
 from dotenv import load_dotenv
 load_dotenv()
@@ -9,11 +11,9 @@ import io
 import re
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from wordcloud import WordCloud
-from pythainlp import word_tokenize
 
 # Add root to sys.path so we can import from backend.py and database.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,11 +21,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend import (
     get_ai_summary, analyze_sentiment, extract_video_id,
     get_comments, extract_timestamps, get_frame_from_youtube,
-    get_highlight_summary, get_video_info, get_ai_comparison
+    get_highlight_summary, get_video_info, get_ai_comparison,
+    safe_word_tokenize
 )
 from database import init_db, save_to_db, load_history, update_title, delete_record
-
-os.environ["PYTHAINLP_DATA_DIR"] = "/tmp/pythainlp-data"
 
 app = FastAPI(title="YouTube AI Insight Analyzer")
 
@@ -44,7 +43,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": f"Server Error: {str(exc)}"})
 
 # Initialize DB
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print("Database init error:", e)
 
 class AnalyzeRequest(BaseModel):
     video_url: str
@@ -108,11 +110,11 @@ def api_analyze(req: AnalyzeRequest):
     )
 
     # Word Cloud
-    channel_tokens = word_tokenize(channel_name.lower(), engine="newmm")
+    channel_tokens = safe_word_tokenize(channel_name.lower(), engine="newmm")
     junk_words = ["ๆ", "คลิป", "ดู", "พี่", "ผม", "คน", "แชนเนล", "ช่อง", "นะ", "ที่", "ครับ", "ค่ะ", "ว่า"]
     junk_words.extend(channel_tokens)
     
-    tokens = word_tokenize(" ".join(comments).lower(), engine="newmm")
+    tokens = safe_word_tokenize(" ".join(comments).lower(), engine="newmm")
     filtered_words = [w for w in tokens if len(w) > 2 and w not in junk_words and not w.isnumeric()]
     processed_text = " ".join(filtered_words)
     
@@ -217,8 +219,3 @@ def api_compare(req: CompareRequest):
         "data_b": data_b,
         "ai_conclusion": ai_conclusion
     }
-
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-public_dir = os.path.join(root_dir, "public")
-if os.path.isdir(public_dir):
-    app.mount("/", StaticFiles(directory=public_dir, html=True), name="public")

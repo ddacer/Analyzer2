@@ -1,10 +1,18 @@
+import os
+os.environ["PYTHAINLP_DATA_DIR"] = "/tmp/pythainlp-data"
+
 from googleapiclient.discovery import build
-from pythainlp import word_tokenize
 import re
 import json
-import os
 import requests
 from dotenv import load_dotenv
+
+def safe_word_tokenize(text, engine="newmm"):
+    try:
+        from pythainlp import word_tokenize
+        return word_tokenize(text, engine=engine)
+    except Exception:
+        return text.split()
 
 def call_ai_api(prompt, ai_api_key="", json_mode=False):
     """ระบบเรียกใช้ AI อัจฉริยะ รองรับ Groq (ฟรี ลื่นสุด), DeepSeek, OpenRouter, และ Gemini พร้อม Fallback อัตโนมัติ"""
@@ -225,7 +233,7 @@ def analyze_sentiment(comments):
         if "555" in comment or "ฮ่า" in comment or "อิอิ" in comment:
             pos_score += 1
             
-        tokens = word_tokenize(comment, engine="newmm")
+        tokens = safe_word_tokenize(comment, engine="newmm")
         pos_score += sum(1 for word in tokens if word in pos_words)
         neg_score += sum(1 for word in tokens if word in neg_words)
         
