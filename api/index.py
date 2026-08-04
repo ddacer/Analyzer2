@@ -12,11 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import pandas as pd
 from wordcloud import WordCloud
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 from pythainlp import word_tokenize
 
 # Add root to sys.path so we can import from backend.py and database.py
@@ -71,17 +67,17 @@ def api_analyze(req: AnalyzeRequest):
     comments = [c["text"] for c in raw_comments_data]
     sentiment_counts = analyze_sentiment(comments)
     ai_data = get_ai_summary(comments, ai_api_key, channel_name)
-    timestamp_df = extract_timestamps(comments)
+    timestamp_data = extract_timestamps(comments)
     
     peak_label = "-"
     peak_sec = 0
     heatmap_list = []
     peak_comments = []
-    if not timestamp_df.empty:
-        peak_row = timestamp_df.loc[timestamp_df['Count'].idxmax()]
+    if timestamp_data:
+        peak_row = max(timestamp_data, key=lambda x: x['Count'])
         peak_label = peak_row['Timestamp']
         peak_sec = int(peak_row['Seconds'])
-        for _, r in timestamp_df.iterrows():
+        for r in timestamp_data:
             heatmap_list.append({"label": str(r['Timestamp']), "count": int(r['Count'])})
         if peak_label != "-":
             peak_comments = [c for c in comments if peak_label in c]
@@ -114,17 +110,20 @@ def api_analyze(req: AnalyzeRequest):
     
     wordcloud_b64 = ""
     try:
-        wordcloud = WordCloud(
-            font_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'THSarabunNew Bold.ttf'), width=800, height=500, background_color='white',
-            regexp=r"[\u0E00-\u0E7F]+" 
-        ).generate(processed_text)
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.imshow(wordcloud, interpolation='bilinear')
-        ax.axis("off")
+        font_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'THSarabunNew Bold.ttf')
+        wc_kwargs = {
+            "width": 800,
+            "height": 500,
+            "background_color": "white",
+            "regexp": r"[\u0E00-\u0E7F]+"
+        }
+        if os.path.exists(font_path):
+            wc_kwargs["font_path"] = font_path
+
+        wordcloud = WordCloud(**wc_kwargs).generate(processed_text)
+        img = wordcloud.to_image()
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
+        img.save(buf, format='PNG')
         wordcloud_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     except Exception as e:
         print("WordCloud error:", e)
@@ -139,9 +138,9 @@ def api_analyze(req: AnalyzeRequest):
     # Vision Frame (Base64)
     frame_b64 = ""
     try:
-        import cv2
         frame_rgb = get_frame_from_youtube(video_url, peak_sec)
-        if not isinstance(frame_rgb, str):
+        if frame_rgb and not isinstance(frame_rgb, str):
+            import cv2
             frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
             _, buffer = cv2.imencode('.jpg', frame_bgr)
             frame_b64 = base64.b64encode(buffer).decode('utf-8')
@@ -171,9 +170,8 @@ def api_analyze(req: AnalyzeRequest):
 
 @app.get("/api/history")
 def api_history():
-    df = load_history()
-    df = df.where(pd.notnull(df), None)
-    return df.to_dict(orient="records")
+    records = load_history()
+    return records
 
 @app.put("/api/history/{record_id}")
 def api_update_title(record_id: int, req: TitleUpdateRequest):
@@ -187,15 +185,15 @@ def api_delete_record(record_id: int):
 
 @app.post("/api/compare")
 def api_compare(req: CompareRequest):
-    df = load_history()
-    df_a = df[df['id'] == req.id_a]
-    df_b = df[df['id'] == req.id_b]
+    records = load_history()
+    list_a = [r for r in records if r.get('id') == req.id_a]
+    list_b = [r for r in records if r.get('id') == req.id_b]
     
-    if df_a.empty or df_b.empty:
+    if not list_a or not list_b:
         raise HTTPException(status_code=400, detail="Record not found")
         
-    data_a = df_a.iloc[0].to_dict()
-    data_b = df_b.iloc[0].to_dict()
+    data_a = list_a[0]
+    data_b = list_b[0]
     
     ai_api_key = os.getenv("DEEPSEEK_API_KEY", os.getenv("GEMINI_API_KEY", ""))
     

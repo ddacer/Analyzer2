@@ -1,7 +1,6 @@
 import os
 import shutil
 import sqlite3
-import pandas as pd
 import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -70,8 +69,11 @@ def save_to_db(url, total, pos, neg, neu, peak_time, ai_data, title, channel_nam
 def load_history():
     """ดึงข้อมูลประวัติทั้งหมดมาแสดงผล"""
     with sqlite3.connect(DB_NAME) as conn:
-        df = pd.read_sql_query(f"SELECT * FROM analysis_history ORDER BY analyzed_at DESC", conn)
-    return df
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM analysis_history ORDER BY analyzed_at DESC")
+        rows = [dict(r) for r in c.fetchall()]
+    return rows
 
 def update_title(record_id, new_title):
     """อัปเดตชื่อคลิปใหม่ลงฐานข้อมูล"""

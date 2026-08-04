@@ -1,9 +1,6 @@
 from googleapiclient.discovery import build
 from pythainlp import word_tokenize
 import re
-import pandas as pd
-import cv2
-import yt_dlp
 import json
 import os
 import requests
@@ -90,14 +87,18 @@ def call_ai_api(prompt, ai_api_key="", json_mode=False):
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if gemini_key and gemini_key.startswith("AIzaSy"):
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash-latest")
-            kwargs = {}
-            if json_mode: kwargs["generation_config"] = {"response_mime_type": "application/json"}
-            res = model.generate_content(prompt, **kwargs)
-            if res and res.text:
-                return res.text.strip()
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            if json_mode:
+                payload["generationConfig"] = {"responseMimeType": "application/json"}
+            res = requests.post(url, headers=headers, json=payload, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return text.strip()
         except Exception:
             pass
 
@@ -292,21 +293,30 @@ def extract_timestamps(comments):
         timestamps.extend(re.findall(r'\b((?:\d{1,2}:)?[0-5]?\d:[0-5]\d)\b', c))
         
     if not timestamps:
-        return pd.DataFrame()
+        return []
         
     def to_seconds(t_str):
         parts = list(map(int, t_str.split(':')))
         if len(parts) == 3: return parts[0]*3600 + parts[1]*60 + parts[2]
         return parts[0]*60 + parts[1]
 
-    df = pd.DataFrame(timestamps, columns=['Timestamp'])
-    df['Seconds'] = df['Timestamp'].apply(to_seconds)
-    return df.groupby(['Timestamp', 'Seconds']).size().reset_index(name='Count').sort_values('Seconds')
+    counts = {}
+    for ts in timestamps:
+        sec = to_seconds(ts)
+        key = (ts, sec)
+        counts[key] = counts.get(key, 0) + 1
+
+    result = []
+    for (ts, sec), count in sorted(counts.items(), key=lambda x: x[0][1]):
+        result.append({'Timestamp': ts, 'Seconds': sec, 'Count': count})
+    return result
 
 
 def get_frame_from_youtube(video_url, target_time_sec):
-    """ดึงภาพ 1 เฟรมจาก YouTube ด้วย yt-dlp และ OpenCV"""
+    """ดึงภาพ 1 เฟรมจาก YouTube ด้วย yt-dlp และ OpenCV (ถ้ามี)"""
     try:
+        import yt_dlp
+        import cv2
         ydl_opts = {'format': 'best[ext=mp4]', 'quiet': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
