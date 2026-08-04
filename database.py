@@ -24,7 +24,11 @@ else:
 def is_supabase_enabled():
     url = os.getenv("SUPABASE_URL", "").strip()
     key = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_ANON_KEY", ""))).strip()
-    return bool(url and key)
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return False
+    if len(key) < 20:
+        return False
+    return True
 
 def get_supabase_headers():
     key = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_ANON_KEY", ""))).strip()
