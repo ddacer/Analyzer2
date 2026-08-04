@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube AI Insight Analyzer</title>
+    <!-- Use Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-tv"></i>
+                <span>AI Insight</span>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-target="analyze-page">
+                    <i class="fa-solid fa-magnifying-glass"></i> วิเคราะห์คลิปใหม่
+                </button>
+                <button class="nav-btn" data-target="history-page">
+                    <i class="fa-solid fa-box-archive"></i> คลังข้อมูลประวัติ
+                </button>
+                <button class="nav-btn" data-target="compare-page">
+                    <i class="fa-solid fa-chart-simple"></i> เปรียบเทียบข้อมูล
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Page 1: Analyze -->
+            <section id="analyze-page" class="page active">
+                <div class="page-header">
+                    <h1>📺 YouTube AI Insight Analyzer</h1>
+                    <p>ระบบวิเคราะห์เจตคติ พร้อมบันทึกข้อมูลอัตโนมัติ (รองรับทุกช่อง YouTube)</p>
+                </div>
+
+                <div class="input-section glass-card">
+                    <div class="input-group">
+                        <i class="fa-brands fa-youtube"></i>
+                        <input type="text" id="video-url-input" placeholder="วางลิงก์ YouTube ที่นี่...">
+                        <button id="analyze-btn" class="primary-btn">
+                            <i class="fa-solid fa-rocket"></i> เริ่มวิเคราะห์ข้อมูล
+                        </button>
+                    </div>
+                </div>
+
+                <div id="analyze-loading" class="loading-state hidden">
+                    <div class="spinner"></div>
+                    <p>กำลังวิเคราะห์และประมวลผลระดับ Big Data...</p>
+                </div>
+
+                <div id="analyze-result" class="result-section hidden">
+                    <!-- Results will be injected here via JS -->
+                </div>
+            </section>
+
+            <!-- Page 2: History -->
+            <section id="history-page" class="page hidden">
+                <div class="page-header">
+                    <h1>🗄️ ระบบฐานข้อมูลประวัติการวิเคราะห์</h1>
+                    <p>จัดการข้อมูล: ดูปกคลิป, แก้ไขชื่อรายการที่วิเคราะห์ และลบทิ้งได้ที่นี่</p>
+                </div>
+                
+                <div class="metric-card glass-card">
+                    <h3 id="history-count">📊 จำนวนรายงานที่บันทึกไว้: 0 คลิป</h3>
+                </div>
+
+                <div id="history-list" class="history-grid">
+                    <!-- History cards will be injected here -->
+                </div>
+            </section>
+
+            <!-- Page 3: Compare -->
+            <section id="compare-page" class="page hidden">
+                <div class="page-header">
+                    <h1>📊 ระบบเปรียบเทียบเจตคติคลิป</h1>
+                    <p>เปรียบเทียบกระแสตอบรับแบบหมัดต่อหมัด เพื่อหา Insight ว่าคอนเทนต์สไตล์ไหนเข้าถึงผู้ชมได้ดีกว่ากัน</p>
+                </div>
+
+                <div class="compare-selectors glass-card">
+                    <h3>🎯 เลือกคลิปที่ต้องการเปรียบเทียบ</h3>
+                    <div class="selector-grid">
+                        <div class="selector-group">
+                            <label>🔴 เลือกคลิปที่ 1 (Video A)</label>
+                            <select id="compare-select-a"></select>
+                        </div>
+                        <div class="selector-group">
+                            <label>🔵 เลือกคลิปที่ 2 (Video B)</label>
+                            <select id="compare-select-b"></select>
+                        </div>
+                    </div>
+                    <button id="compare-btn" class="primary-btn full-width">
+                        <i class="fa-solid fa-scale-balanced"></i> เริ่มประมวลผลการเปรียบเทียบ
+                    </button>
+                </div>
+
+                <div id="compare-loading" class="loading-state hidden">
+                    <div class="spinner"></div>
+                    <p>กำลังสร้าง Dashboard เปรียบเทียบ...</p>
+                </div>
+
+                <div id="compare-result" class="compare-result-section hidden">
+                    <!-- Compare results injected here -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Toast Notification System -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
