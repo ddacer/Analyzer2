@@ -25,6 +25,8 @@ from backend import (
 )
 from database import init_db, save_to_db, load_history, update_title, delete_record
 
+os.environ["PYTHAINLP_DATA_DIR"] = "/tmp/pythainlp-data"
+
 app = FastAPI(title="YouTube AI Insight Analyzer")
 
 app.add_middleware(
@@ -34,6 +36,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(status_code=500, content={"detail": f"Server Error: {str(exc)}"})
 
 # Initialize DB
 init_db()

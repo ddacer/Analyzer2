@@ -109,12 +109,18 @@ analyzeBtn.addEventListener('click', async () => {
             body: JSON.stringify({ video_url: url })
         });
         
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'เกิดข้อผิดพลาดในการวิเคราะห์');
+        const rawText = await res.text();
+        let data = {};
+        try {
+            data = JSON.parse(rawText);
+        } catch (e) {
+            data = { detail: rawText };
         }
 
-        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || 'เกิดข้อผิดพลาดในการวิเคราะห์');
+        }
+
         renderAnalyzeResult(data);
         showToast('วิเคราะห์และบันทึกข้อมูลสำเร็จ!');
         analyzeInput.value = '';
@@ -387,7 +393,17 @@ async function loadHistory() {
     
     try {
         const res = await fetch('/api/history');
-        const data = await res.json();
+        const rawText = await res.text();
+        let data = [];
+        try {
+            data = JSON.parse(rawText);
+        } catch (e) {
+            throw new Error(rawText.substring(0, 150) || 'เกิดข้อผิดพลาดในการโหลดประวัติ');
+        }
+        
+        if (!res.ok) {
+            throw new Error((data && data.detail) || 'เกิดข้อผิดพลาดในการโหลดประวัติ');
+        }
         
         document.getElementById('history-count').innerText = `📊 จำนวนรายงานที่บันทึกไว้: ${data.length} คลิป`;
         
@@ -525,8 +541,11 @@ document.getElementById('compare-btn').addEventListener('click', async () => {
             body: JSON.stringify({ id_a: parseInt(idA), id_b: parseInt(idB) })
         });
         
-        if (!res.ok) throw new Error('การประมวลผลล้มเหลว');
-        const data = await res.json();
+        const rawText = await res.text();
+        let data = {};
+        try { data = JSON.parse(rawText); } catch(e){ data = { detail: rawText }; }
+        
+        if (!res.ok) throw new Error(data.detail || 'การประมวลผลล้มเหลว');
         
         renderCompareResult(data);
     } catch(e) {
