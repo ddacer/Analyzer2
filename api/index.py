@@ -58,7 +58,13 @@ class CompareRequest(BaseModel):
     id_a: int
     id_b: int
 
+@app.get("/")
+@app.get("/api")
+def health_check():
+    return {"status": "ok", "message": "YouTube AI Insight Analyzer API"}
+
 @app.post("/api/analyze")
+@app.post("/analyze")
 def api_analyze(req: AnalyzeRequest):
     video_url = req.video_url
     if not video_url:
@@ -179,21 +185,25 @@ def api_analyze(req: AnalyzeRequest):
     }
 
 @app.get("/api/history")
+@app.get("/history")
 def api_history():
     records = load_history()
     return records
 
 @app.put("/api/history/{record_id}")
+@app.put("/history/{record_id}")
 def api_update_title(record_id: int, req: TitleUpdateRequest):
     update_title(record_id, req.new_title)
     return {"success": True}
 
 @app.delete("/api/history/{record_id}")
+@app.delete("/history/{record_id}")
 def api_delete_record(record_id: int):
     delete_record(record_id)
     return {"success": True}
 
 @app.post("/api/compare")
+@app.post("/compare")
 def api_compare(req: CompareRequest):
     records = load_history()
     list_a = [r for r in records if r.get('id') == req.id_a]
