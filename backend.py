@@ -14,15 +14,7 @@ def safe_word_tokenize(text, engine="newmm"):
     except Exception:
         return text.split()
 
-def call_ai_api(prompt, ai_api_key="", json_mode=False):
-    """ระบบเรียกใช้ AI อัจฉริยะ รองรับ Groq (ฟรี ลื่นสุด), DeepSeek, OpenRouter, และ Gemini พร้อม Fallback อัตโนมัติ"""
-    load_dotenv(override=True)
-
-    system_msg = "คุณคือ AI ผู้เชี่ยวชาญด้านวิเคราะห์พฤติกรรมผู้ชมโซเชียลมีเดีย สรุปข้อมูลอย่างแม่นยำ กระชับ ตรงประเด็น เป็นภาษาไทย"
-    if json_mode:
-        system_msg += " ในรูปแบบ JSON เท่านั้น"
-
-    # 1. ลองใช้ Groq API (ฟรี 100% - เสถียรและเร็วที่สุด)
+def _call_groq(prompt, system_msg, json_mode):
     groq_key = os.getenv("GROQ_API_KEY", "")
     if groq_key and groq_key.startswith("gsk_"):
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -37,14 +29,12 @@ def call_ai_api(prompt, ai_api_key="", json_mode=False):
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                return res.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
-            pass
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code == 200:
+            return res.json()["choices"][0]["message"]["content"].strip()
+    return None
 
-    # 2. ลองใช้ DeepSeek API
+def _call_deepseek(prompt, system_msg, json_mode, ai_api_key=""):
     deepseek_key = os.getenv("DEEPSEEK_API_KEY", ai_api_key)
     if deepseek_key and deepseek_key.startswith("sk-") and not deepseek_key.startswith("sk-or-"):
         url = "https://api.deepseek.com/chat/completions"
@@ -63,14 +53,12 @@ def call_ai_api(prompt, ai_api_key="", json_mode=False):
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
             
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                return res.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
-            pass
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code == 200:
+            return res.json()["choices"][0]["message"]["content"].strip()
+    return None
 
-    # 3. ลองใช้ OpenRouter API (โมเดลฟรี)
+def _call_openrouter(prompt, system_msg, json_mode):
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
     if openrouter_key:
         url = "https://openrouter.ai/api/v1/chat/completions"
@@ -84,73 +72,138 @@ def call_ai_api(prompt, ai_api_key="", json_mode=False):
             "temperature": 0.3
         }
         if json_mode: payload["response_format"] = {"type": "json_object"}
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                return res.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
-            pass
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code == 200:
+            return res.json()["choices"][0]["message"]["content"].strip()
+    return None
 
-    # 4. ลองใช้ Google Gemini API
+def _call_gemini(prompt, system_msg, json_mode):
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if gemini_key and gemini_key.startswith("AIzaSy"):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [{"parts": [{"text": system_msg + "\n\n" + prompt}]}]
+        }
+        if json_mode:
+            payload["generationConfig"] = {"responseMimeType": "application/json"}
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code == 200:
+            data = res.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return text.strip()
+    return None
+
+
+def call_ai_api(prompt, ai_api_key="", json_mode=False, model_provider="auto"):
+    """ระบบเรียกใช้ AI อัจฉริยะ รองรับ Groq, DeepSeek, Gemini, OpenRouter พร้อมระบุโมเดลเฉพาะเจาะจงและ Fallback อัตโนมัติ"""
+    load_dotenv(override=True)
+
+    system_msg = (
+        "คุณคือ Senior Social Media Data Analyst และ Expert Behavioral Psychologist "
+        "ผู้เชี่ยวชาญระดับสูงในการวิเคราะห์พฤติกรรมผู้ชม เสียงของมนุษย์ (Voice of Audience/Customer) "
+        "และกระแสตอบรับบนโซเชียลมีเดียภาษาไทย\n"
+        "หน้าที่ของคุณคือวิเคราะห์ความหมายแฝง นัยยะทางอารมณ์ บริบทโซเชียล (Context & Subtext) "
+        "ศัพท์แสลง มุกตลก คำประชดประชัน (Sarcasm/Irony) ภาษาเกมเมอร์ ภาษาอินเทอร์เน็ต และมีมภาษาไทย\n"
+        "วิเคราะห์อย่างเที่ยงตรง ลึกซึ้ง แม่นยำ ไม่เจือปนอคติ และห้ามสรุปแบบหว่านค่ายกว้างๆ "
+        "อ้างอิงหลักฐานจากคอมเมนต์จริงเสมอ"
+    )
+    if json_mode:
+        system_msg += " ในรูปแบบ JSON เท่านั้น"
+
+    provider = str(model_provider).strip().lower()
+
+    # 1. หากผู้ใช้เลือกโมเดลเฉพาะเจาะจง ให้พยายามใช้โมเดลนั้นเป็นอันดับแรก
+    if provider == "groq":
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}]
-            }
-            if json_mode:
-                payload["generationConfig"] = {"responseMimeType": "application/json"}
-            res = requests.post(url, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return text.strip()
+            res = _call_groq(prompt, system_msg, json_mode)
+            if res: return res
+        except Exception: pass
+    elif provider == "deepseek":
+        try:
+            res = _call_deepseek(prompt, system_msg, json_mode, ai_api_key)
+            if res: return res
+        except Exception: pass
+    elif provider == "gemini":
+        try:
+            res = _call_gemini(prompt, system_msg, json_mode)
+            if res: return res
+        except Exception: pass
+
+    # 2. หากผู้ใช้เลือก auto หรือโมเดลที่เลือกใช้งานไม่ได้ ให้ใช้ Auto Fallback ตามลำดับ
+    fallback_funcs = [
+        _call_groq, 
+        lambda p, s, j: _call_deepseek(p, s, j, ai_api_key), 
+        _call_openrouter, 
+        _call_gemini
+    ]
+    for fn in fallback_funcs:
+        try:
+            res = fn(prompt, system_msg, json_mode)
+            if res:
+                return res
         except Exception:
-            pass
+            continue
 
     raise Exception(
-        "ไม่สามารถเชื่อมต่อกับ AI ได้ กรุณาตรวจสอบ GROQ_API_KEY ในไฟล์ .env"
+        "ไม่สามารถเชื่อมต่อกับ AI ได้ กรุณาตรวจสอบ API Key ในไฟล์ .env (GROQ_API_KEY / DEEPSEEK_API_KEY / GEMINI_API_KEY)"
     )
 
 
-def get_ai_summary(comments, api_key_deepseek="", channel_name="YouTube"):
+def get_ai_summary(comments, api_key_deepseek="", channel_name="YouTube", video_title="", model_provider="auto"):
     try:
-        context = "\n".join(comments[:100]) 
+        # คัดเลือกลำดับคอมเมนต์สูงสุด 120 คอมเมนต์ และจัดรูปแบบให้อ่านง่าย
+        sampled_comments = comments[:120] if comments else []
+        formatted_comments = "\n".join([f"- {c.strip()}" for c in sampled_comments if c.strip()])
+        
+        video_context_str = f"ชื่อคลิป: '{video_title}'\nช่อง: '{channel_name}'" if video_title else f"ช่อง: '{channel_name}'"
         
         prompt = f"""
-        คุณคือผู้เชี่ยวชาญด้านวิเคราะห์พฤติกรรมผู้ชมคลิปวิดีโอช่อง {channel_name} บน YouTube
-        เข้าใจภาษาไทย ศัพท์แสลง มุกตลก คำประชด และบริบทโซเชียลเป็นอย่างดี
-        จงวิเคราะห์คอมเมนต์ต่อไปนี้ โดยจัดกลุ่มประเด็นที่คล้ายกันเข้าด้วยกัน แล้วสรุปผลภาพรวมในรูปแบบ JSON เท่านั้น ห้ามพิมพ์ข้อความอื่นนอกเหนือจาก JSON
+คุณคือนักวิเคราะห์พฤติกรรมผู้ชมและสรุป Insight จากความคิดเห็นบนโซเชียลมีเดียภาษาไทยที่มีความแม่นยำระดับสูงสุด
+
+บริบทวิดีโอที่กำลังวิเคราะห์:
+{video_context_str}
+
+คำแนะนำเฉพาะสำหรับการวิเคราะห์บริบทภาษาไทยและโซเชียลมีเดีย:
+1. เข้าใจภาษาไทยยุคปัจจุบัน ศัพท์วงการเกม สแลงอินเทอร์เน็ต มุกตลก มีมยอดฮิต และภาษาพูดอย่างลึกซึ้ง
+2. **การตรวจจับคำประชด (Sarcasm / Irony / Satire Detection)**:
+   - คำอย่างเช่น 'ตึงจัด', 'สภาพ', 'เอาเรื่อง', 'เจริญ', 'เล่นดีมากมั้ง', 'เก่งเหลือเกิน', 'ตื่นกี่โมง', 'เทพซ่า', 'โบ๊ะบ๊ะ' 
+   - หากสังเกตเห็นว่าผู้ชมใช้ในบริบทล้อเลียน แซวความผิดพลาด แซวความตลก หรือประชดประชัน **ห้ามจัดเป็นคำชม (Positive) เด็ดขาด** ให้จัดไว้ในหมวดการแซว/ประชดประชัน (`sarcasm`) เท่านั้น
+3. **ความแม่นยำของหัวข้อ (Specific & Actionable Topics)**:
+   - ห้ามใช้หัวข้อทั่วไปแบบลอยๆ เช่น 'ชอบคลิป', 'สนุกดี', 'ไม่ชอบ', 'คนด่า'
+   - หัวข้อ (`topic`) ต้องระบุชัดเจนว่าชื่นชอบหรือติชมประเด็นใด เช่น 'ชื่นชอบจังหวะการตัดต่อและมุกตลกในนาทีแรก', 'วิพากษ์วิจารณ์เรื่องระดับเสียงไมค์และดนตรีประกอบที่ดังเกินไป'
+4. **รายละเอียดและการอ้างอิง (`details`)**:
+   - อธิบายเหตุผลเบื้องหลังความคิดเห็นของผู้ชมอย่างกระชับแต่ได้ใจความ
+   - ต้องยกตัวอย่างคำพูดจริงจากคอมเมนต์สั้นๆ มาประกอบในรายละเอียดด้วยเสมอ เช่น `(อ้างอิงคอมเมนต์: '...')`
+5. **การรวมประเด็น (Clustering)**:
+   - รวมคอมเมนต์ที่มีความหมายหรือพูดถึงเรื่องเดียวกันไว้ในหัวข้อเดียว ห้ามสร้างหัวข้อซ้ำ
+   - คัดเลือกรวบรวมเฉพาะประเด็นหลักที่คนพูดถึงบ่อยที่สุด หมวดละไม่เกิน 3 - 4 หัวข้อ
+
+กฎเหล็กรูปแบบ JSON:
+- ตอบกลับเฉพาะโครงสร้าง JSON ที่ถูกต้องสมบูรณ์เท่านั้น ห้ามใส่คำเกริ่นหรือข้อความ markdown นอกเหนือจาก JSON
+- ในข้อความ JSON ห้ามใช้เครื่องหมายคำพูดคู่ซ้อนข้างใน ให้ใช้เครื่องหมายคำพูดเดี่ยว (') สำหรับการอ้างอิงคำพูด
+
+รูปแบบ JSON ที่ต้องการเป๊ะๆ:
+{{
+  "positive": [
+    {{"topic": "สรุปประเด็นที่คนชม/ชอบอย่างเจาะจง (ภาษาไทย)", "details": "อธิบายรายละเอียดว่าทำไมคนถึงชอบ พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (อ้างอิง: '...') "}}
+  ],
+  "negative": [
+    {{"topic": "สรุปปัญหา/ข้อติชม/ดราม่าอย่างเจาะจง (ภาษาไทย)", "details": "อธิบายรายละเอียดปัญหาและข้อติชม พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (อ้างอิง: '...') "}}
+  ],
+  "sarcasm": [
+    {{"topic": "สรุปประเด็นการแซว/ประชดประชัน/Irony อย่างเจาะจง (ภาษาไทย)", "details": "อธิบายบริบทการแซวหรือประชด พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (อ้างอิง: '...') "}}
+  ],
+  "recommendation": [
+    {{"topic": "สรุปข้อเสนอแนะ/สิ่งที่คนดูอยากเห็นเพิ่มอย่างเจาะจง (ภาษาไทย)", "details": "อธิบายรายละเอียดสิ่งที่ผู้ชมเรียกร้อง พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (อ้างอิง: '...') "}}
+  ]
+}}
+
+รายการคอมเมนต์ของผู้ชมที่ต้องนำมาวิเคราะห์:
+{formatted_comments}
+"""
         
-        กฎเหล็กที่ 1: ห้ามใช้เครื่องหมายคำพูดคู่ (") ซ้อนไว้ข้างในข้อความ ให้ใช้เครื่องหมายคำพูดเดี่ยว (') แทน
-        กฎเหล็กที่ 2: ระวังคำประชดประชัน (Sarcasm) เช่นคำว่า 'ตึงจัด', 'เจริญ', 'สภาพ', 'เอาเรื่อง', 'เล่นดีมากมั้ง' หากอยู่ในบริบทประชด ห้ามจัดเป็นคำชมเด็ดขาด ให้แยกออกมาใส่ในหมวด sarcasm
-        กฎเหล็กที่ 3: ห้ามมีหัวข้อ (topic) ซ้ำกัน ให้รวมคอมเมนต์เรื่องเดียวกันสรุปไว้เป็นหัวข้อเดียว
-        กฎเหล็กที่ 4: คัดเฉพาะประเด็นหลักที่คนพูดถึงเยอะที่สุด หมวดละไม่เกิน 3 ถึง 4 หัวข้อ
-        กฎเหล็กที่ 5: ข้อมูลผลลัพธ์ทั้งหมดใน JSON (ทั้ง topic และ details) ต้องเขียนเป็นภาษาไทยที่เป็นธรรมชาติ อ่านเข้าใจง่าย
-        
-        รูปแบบ JSON ที่ต้องการเป๊ะๆ:
-        {{
-          "positive": [
-            {{"topic": "สรุปเรื่องที่คนชม/ชอบ (ภาษาไทย)", "details": "อธิบายรายละเอียดว่าทำไมคนถึงชอบ พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (คอมเมนต์: '...') "}}
-          ],
-          "negative": [
-            {{"topic": "สรุปปัญหา/ดราม่า/ข้อติ (ภาษาไทย)", "details": "อธิบายรายละเอียดปัญหา พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (คอมเมนต์: '...') "}}
-          ],
-          "sarcasm": [
-            {{"topic": "สรุปการแซว/ประชดประชัน (ภาษาไทย)", "details": "อธิบายรายละเอียดการแซว พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (คอมเมนต์: '...') "}}
-          ],
-          "recommendation": [
-            {{"topic": "สรุปสิ่งที่คนดูอยากให้ทำเพิ่ม (ภาษาไทย)", "details": "อธิบายรายละเอียดสิ่งที่เรียกร้อง พร้อมยกตัวอย่างคอมเมนต์สั้นๆ (คอมเมนต์: '...') "}}
-          ]
-        }}
-        
-        คอมเมนต์ที่ต้องวิเคราะห์:
-        {context}
-        """
-        
-        json_str = call_ai_api(prompt, api_key_deepseek, json_mode=True)
+        json_str = call_ai_api(prompt, api_key_deepseek, json_mode=True, model_provider=model_provider)
         match = re.search(r'\{.*\}', json_str, re.DOTALL)
         if match:
             clean_text = match.group(0)
@@ -163,25 +216,32 @@ def get_ai_summary(comments, api_key_deepseek="", channel_name="YouTube"):
         return {"error": str(e)}
 
 
-def get_highlight_summary(highlight_comments, api_key_deepseek="", channel_name="YouTube"):
+def get_highlight_summary(highlight_comments, api_key_deepseek="", channel_name="YouTube", video_title="", peak_label="", model_provider="auto"):
     """ให้ AI สรุปเหตุการณ์จากคอมเมนต์ในช่วงเวลาจุดพีค (รองรับทุกประเภทคลิปวิดีโอ)"""
     if not highlight_comments:
-        return "ไม่มีข้อมูลคอมเมนต์เพียงพอ"
+        return "ไม่มีข้อมูลคอมเมนต์เพียงพอในการวิเคราะห์"
     try:
-        context = "\n".join(highlight_comments[:30])
+        context = "\n".join([f"- {c.strip()}" for c in highlight_comments[:35] if c.strip()])
+        
+        video_info_str = f"คลิป '{video_title}' " if video_title else ""
+        time_info_str = f"ณ นาทีที่ {peak_label} " if peak_label else ""
         
         prompt = f"""
-        คุณคือนักวิเคราะห์คอนเทนต์วิดีโอจากช่อง {channel_name}
-        จงอ่านความคิดเห็นของผู้ชมต่อไปนี้ แล้วสรุปว่า ณ ช่วงเวลานี้เกิดเหตุการณ์ ไฮไลท์ หรือประเด็นอะไรขึ้น 
-        ทำไมคนดูถึงพูดถึง พิมพ์ประชด หรือแสดงอารมณ์กันเยอะ
-        
-        ข้อกำหนดการตอบ:
-        - เขียนสรุปสั้นๆ 1-2 ประโยค เป็นภาษาไทยอ่านง่าย เป็นธรรมชาติ ไม่ต้องตอบเป็น JSON และไม่ต้องใส่ป้ายกำกับใดๆ
-        
-        ความคิดเห็นของคนดู:
-        {context}
-        """
-        result = call_ai_api(prompt, api_key_deepseek, json_mode=False)
+คุณคือนักวิเคราะห์เหตุการณ์และคอนเทนต์วิดีโอระดับมืออาชีพ
+จงอ่านความคิดเห็นของผู้ชม{time_info_str}จาก{video_info_str}ช่อง {channel_name} ต่อไปนี้:
+
+ความคิดเห็นของผู้ชม:
+{context}
+
+ภารกิจ:
+วิเคราะห์และสรุปอย่างเจาะจงว่าเกิดเหตุการณ์ ไฮไลท์ มุกตลก ความผิดพลาด หรือช็อตเด็ดอะไรขึ้น ณ ช่วงเวลานี้
+ทำไมผู้ชมจึงแสดงปฏิกิริยาหรือพิมพ์ข้อความหลั่งไหลเข้ามาจำนวนมาก
+
+ข้อกำหนดการตอบ:
+- เขียนบทสรุปเชิงวิเคราะห์ที่กระชับ แม่นยำ ตรงประเด็น ความยาว 1-2 ประโยค เป็นภาษาไทยที่เป็นธรรมชาติ
+- ไม่ต้องใส่คำเกริ่น ไม่ต้องตอบเป็น JSON และไม่ต้องใส่ป้ายกำกับใดๆ
+"""
+        result = call_ai_api(prompt, api_key_deepseek, json_mode=False, model_provider=model_provider)
         result = re.sub(r'```json\s*', '', result)
         result = re.sub(r'```\s*', '', result)
         return result.strip()
@@ -189,27 +249,37 @@ def get_highlight_summary(highlight_comments, api_key_deepseek="", channel_name=
         return f"Error: {str(e)}"
 
 
-def get_ai_comparison(summary_a, summary_b, title_a, title_b, channel_a, channel_b, api_key_deepseek=""):
+def get_ai_comparison(summary_a, summary_b, title_a, title_b, channel_a, channel_b, api_key_deepseek="", model_provider="auto"):
     """ให้ AI สรุปเปรียบเทียบผลตอบรับของทั้ง 2 คลิปแบบหมัดต่อหมัด"""
     try:
         prompt = f"""
-        คุณคือนักวิเคราะห์การตลาดและพฤติกรรมผู้ชมบนโซเชียลมีเดีย
-        
-        นี่คือข้อมูลสรุปคอมเมนต์จากคลิป A:
-        ชื่อคลิป: {title_a} (ช่อง: {channel_a})
-        เนื้อหาสรุปคลิป A: {summary_a}
-        
-        นี่คือข้อมูลสรุปคอมเมนต์จากคลิป B:
-        ชื่อคลิป: {title_b} (ช่อง: {channel_b})
-        เนื้อหาสรุปคลิป B: {summary_b}
-        
-        จงเปรียบเทียบผลตอบรับของทั้ง 2 คลิปนี้ 
-        เขียนบทสรุปภาพรวม (Executive Conclusion) แบบสั้นและกระชับที่สุด (ไม่เกิน 2-3 บรรทัด) โดยสรุปว่า:
-        คลิปไหนดึงดูดใจได้ดีกว่ากัน เพราะอะไร และคนทำช่องควรเรียนรู้อะไรจาก 2 คลิปนี้
-        
-        ตอบเป็นภาษาไทยเท่านั้น ด้วยภาษาที่อ่านง่ายและตรงประเด็น
-        """
-        return call_ai_api(prompt, api_key_deepseek, json_mode=False)
+คุณคือ Senior Content Strategist และ Media Behavioral Analyst
+
+จงวิเคราะห์และเปรียบเทียบผลตอบรับของผู้ชมระหว่างวิดีโอ 2 คลิปอย่างละเอียดและเป็นมืออาชีพ:
+
+[คลิป A]
+ชื่อคลิป: {title_a}
+ช่อง: {channel_a}
+ผลสรุปความคิดเห็นคลิป A:
+{json.dumps(summary_a, ensure_ascii=False) if isinstance(summary_a, dict) else summary_a}
+
+[คลิป B]
+ชื่อคลิป: {title_b}
+ช่อง: {channel_b}
+ผลสรุปความคิดเห็นคลิป B:
+{json.dumps(summary_b, ensure_ascii=False) if isinstance(summary_b, dict) else summary_b}
+
+ภารกิจของคุณ:
+เปรียบเทียบกระแสตอบรับ จุดแข็ง จุดที่ผู้ชมชื่นชอบ และประเด็นดราม่า/ข้อติชมของทั้งสองคลิปแบบหมัดต่อหมัด
+แล้วเขียนบทสรุปภาพรวมผู้บริหาร (Executive Conclusion) ที่กระชับ ได้ใจความ (ไม่เกิน 3-4 บรรทัด) โดยครอบคลุม:
+1. คลิปไหนมีกระแสตอบรับเชิงบวกและสร้าง Engagement ได้ดีกว่ากัน พร้อมเหตุผลหลัก
+2. ความแตกต่างสำคัญของอารมณ์ผู้ชมที่มีต่อทั้งสองคลิป
+3. ข้อเสนอแนะเชิงกลยุทธ์ (Key Takeaway) ที่ผู้สร้างคอนเทนต์ควรนำไปปรับใช้
+
+ข้อกำหนด:
+- ตอบเป็นภาษาไทยด้วยภาษาที่กระชับ อ่านง่าย ตรงประเด็น และเฉียบคม
+"""
+        return call_ai_api(prompt, api_key_deepseek, json_mode=False, model_provider=model_provider)
     except Exception as e:
         return f"Error: {str(e)}"
 

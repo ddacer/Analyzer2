@@ -50,6 +50,7 @@ except Exception as e:
 
 class AnalyzeRequest(BaseModel):
     video_url: str
+    model_provider: str = "auto"
 
 class TitleUpdateRequest(BaseModel):
     new_title: str
@@ -57,6 +58,7 @@ class TitleUpdateRequest(BaseModel):
 class CompareRequest(BaseModel):
     id_a: int
     id_b: int
+    model_provider: str = "auto"
 
 @app.get("/")
 @app.get("/api")
@@ -85,7 +87,7 @@ def api_analyze(req: AnalyzeRequest):
 
     comments = [c["text"] for c in raw_comments_data]
     sentiment_counts = analyze_sentiment(comments)
-    ai_data = get_ai_summary(comments, ai_api_key, channel_name)
+    ai_data = get_ai_summary(comments, ai_api_key, channel_name, video_title=real_video_title, model_provider=req.model_provider)
     timestamp_data = extract_timestamps(comments)
     
     peak_label = "-"
@@ -150,7 +152,7 @@ def api_analyze(req: AnalyzeRequest):
     highlight_summary = ""
     if peak_sec > 0:
         if peak_comments:
-            highlight_summary = get_highlight_summary(peak_comments, ai_api_key, channel_name)
+            highlight_summary = get_highlight_summary(peak_comments, ai_api_key, channel_name, video_title=real_video_title, peak_label=peak_label, model_provider=req.model_provider)
             if isinstance(highlight_summary, dict) and "error" in highlight_summary:
                 highlight_summary = highlight_summary["error"]
                 
@@ -224,7 +226,8 @@ def api_compare(req: CompareRequest):
         data_a.get('ai_summary', ''), data_b.get('ai_summary', ''), 
         data_a.get('video_title', ''), data_b.get('video_title', ''), 
         data_a.get('channel_name', ''), data_b.get('channel_name', ''), 
-        ai_api_key
+        ai_api_key,
+        model_provider=req.model_provider
     )
     
     return {

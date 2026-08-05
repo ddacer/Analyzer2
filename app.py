@@ -55,8 +55,27 @@ st.markdown("""
 # ส่วนเมนูนำทาง (Sidebar)
 # ==========================================
 st.sidebar.title("📌 เมนูระบบ")
-# 🔴 เพิ่มเมนู "📊 เปรียบเทียบข้อมูล" เข้าไปใน List
 page = st.sidebar.radio("เลือกหน้าจอการทำงาน:", ["🔍 วิเคราะห์คลิปใหม่", "🗄️ คลังข้อมูลประวัติ", "📊 เปรียบเทียบข้อมูล"])
+st.sidebar.divider()
+
+st.sidebar.subheader("🤖 เลือกโมเดล AI ในการวิเคราะห์")
+model_choice = st.sidebar.selectbox(
+    "โมเดล AI:",
+    [
+        "🤖 Auto (เลือกอัตโนมัติ/เสถียรสุด)",
+        "⚡ Groq (Llama-3.3 70B)",
+        "🧠 DeepSeek (DeepSeek-Chat)",
+        "✨ Google Gemini (Gemini 1.5 Flash)"
+    ],
+    index=0
+)
+model_provider_map = {
+    "🤖 Auto (เลือกอัตโนมัติ/เสถียรสุด)": "auto",
+    "⚡ Groq (Llama-3.3 70B)": "groq",
+    "🧠 DeepSeek (DeepSeek-Chat)": "deepseek",
+    "✨ Google Gemini (Gemini 1.5 Flash)": "gemini"
+}
+selected_model_provider = model_provider_map.get(model_choice, "auto")
 st.sidebar.divider()
 
 # 🔴 โหลด API Keys จาก Environment Variables เพื่อความปลอดภัย
@@ -91,8 +110,8 @@ if page == "🔍 วิเคราะห์คลิปใหม่":
                     comments = [c["text"] for c in raw_comments_data]
                     sentiment_counts = analyze_sentiment(comments)
                     
-                    # เรียก AI สรุปคอมเมนต์ทั้งหมด โดยส่งชื่อช่องไปให้ AI รู้ด้วย
-                    ai_data = get_ai_summary(comments, gemini_api_key, channel_name)
+                    # เรียก AI สรุปคอมเมนต์ทั้งหมด โดยส่งชื่อคลิป ชื่อช่อง และโมเดลที่เลือก
+                    ai_data = get_ai_summary(comments, gemini_api_key, channel_name, video_title=real_video_title, model_provider=selected_model_provider)
                     
                     # สกัด Timestamp
                     timestamp_df = extract_timestamps(comments)
@@ -196,9 +215,9 @@ if page == "🔍 วิเคราะห์คลิปใหม่":
                                     
                                     peak_comments = [c for c in comments if peak_label in c]
                                     if peak_comments:
-                                        # 🔴 เรียกใช้ฟังก์ชัน AI สรุปช็อตไฮไลต์ โดยระบุชื่อช่อง
+                                        # 🔴 เรียกใช้ฟังก์ชัน AI สรุปช็อตไฮไลต์ โดยระบุบริบทคลิป เวลาจุดพีค และโมเดลที่เลือก
                                         with st.spinner("🧠 AI กำลังสรุปเหตุการณ์ในช็อตนี้..."):
-                                            highlight_summary = get_highlight_summary(peak_comments, gemini_api_key, channel_name)
+                                            highlight_summary = get_highlight_summary(peak_comments, gemini_api_key, channel_name, video_title=real_video_title, peak_label=peak_label, model_provider=selected_model_provider)
                                             
                                         st.success(f"🤖 **AI Insight:** {highlight_summary}")
                                         
@@ -406,7 +425,8 @@ elif page == "📊 เปรียบเทียบข้อมูล":
                     with st.spinner("🧠 AI กำลังเปรียบเทียบข้อมูลเชิงลึก..."):
                         ai_conclusion = get_ai_comparison(
                             data_a['ai_summary'], data_b['ai_summary'], 
-                            title_a, title_b, channel_a, channel_b, gemini_api_key
+                            title_a, title_b, channel_a, channel_b, gemini_api_key,
+                            model_provider=selected_model_provider
                         )
                     st.success(ai_conclusion)
                     

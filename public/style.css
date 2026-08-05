@@ -162,7 +162,60 @@ body {
     box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Inputs & Buttons */
+/* Model Selector Styling */
+.model-select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    background: rgba(15, 23, 42, 0.4);
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+}
+
+.model-select-wrapper label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.model-select-wrapper label i {
+    color: var(--primary);
+    font-size: 1.2rem;
+}
+
+.model-select-input {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.8);
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.model-select-input:hover, .model-select-input:focus {
+    border-color: var(--primary);
+    background: rgba(30, 41, 59, 0.95);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.model-select-input option {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 0.5rem;
+}
+
 .input-group {
     display: flex;
     gap: 1rem;

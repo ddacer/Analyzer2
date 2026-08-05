@@ -89,11 +89,13 @@ let activeSentimentChart = null;
 // =====================================
 const analyzeBtn = document.getElementById('analyze-btn');
 const analyzeInput = document.getElementById('video-url-input');
+const aiModelSelect = document.getElementById('ai-model-select');
 const analyzeLoading = document.getElementById('analyze-loading');
 const analyzeResult = document.getElementById('analyze-result');
 
 analyzeBtn.addEventListener('click', async () => {
     const url = analyzeInput.value.trim();
+    const modelProvider = aiModelSelect ? aiModelSelect.value : 'auto';
     if (!url) {
         showToast('กรุณาวางลิงก์ YouTube ก่อน', 'error');
         return;
@@ -106,7 +108,7 @@ analyzeBtn.addEventListener('click', async () => {
         const res = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ video_url: url })
+            body: JSON.stringify({ video_url: url, model_provider: modelProvider })
         });
         
         const rawText = await res.text();

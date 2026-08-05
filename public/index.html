@@ -44,6 +44,17 @@
                 </div>
 
                 <div class="input-section glass-card">
+                    <div class="model-select-wrapper">
+                        <label for="ai-model-select">
+                            <i class="fa-solid fa-robot"></i> เลือกโมเดล AI ในการวิเคราะห์:
+                        </label>
+                        <select id="ai-model-select" class="model-select-input">
+                            <option value="auto">🤖 Auto (เลือกสลับให้อัตโนมัติ - เสถียรสุด)</option>
+                            <option value="groq">⚡ Groq (Llama-3.3 70B - ประมวลผลเร็วที่สุด)</option>
+                            <option value="deepseek">🧠 DeepSeek (DeepSeek-Chat - วิเคราะห์ไทยลึกซึ้ง)</option>
+                            <option value="gemini">✨ Google Gemini (Gemini 1.5 Flash)</option>
+                        </select>
+                    </div>
                     <div class="input-group">
                         <i class="fa-brands fa-youtube"></i>
                         <input type="text" id="video-url-input" placeholder="วางลิงก์ YouTube ที่นี่...">
