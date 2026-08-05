@@ -286,7 +286,8 @@ elif page == "🗄️ คลังข้อมูลประวัติ":
     st.title("🗄️ ระบบฐานข้อมูลประวัติการวิเคราะห์")
     st.markdown("จัดการข้อมูล: ดูปกคลิป, แก้ไขชื่อรายการที่วิเคราะห์ และลบทิ้งได้ที่นี่")
     
-    history_df = load_history()
+    history_data = load_history()
+    history_df = pd.DataFrame(history_data)
     
     if history_df.empty:
         st.info("ยังไม่มีข้อมูลในระบบ กรุณาไปที่หน้า 'วิเคราะห์คลิปใหม่' เพื่อเพิ่มข้อมูลครับ")
@@ -349,7 +350,8 @@ elif page == "📊 เปรียบเทียบข้อมูล":
     st.title("📊 ระบบเปรียบเทียบเจตคติคลิป (Comparison Dashboard)")
     st.markdown("เปรียบเทียบกระแสตอบรับแบบหมัดต่อหมัด เพื่อหา Insight ว่าคอนเทนต์สไตล์ไหนเข้าถึงผู้ชมได้ดีกว่ากัน")
     
-    history_df = load_history()
+    history_data = load_history()
+    history_df = pd.DataFrame(history_data)
     
     if len(history_df) < 2:
         st.warning("⚠️ ต้องมีข้อมูลวิเคราะห์อย่างน้อย 2 คลิปในระบบ เพื่อทำการเปรียบเทียบ กรุณาไปวิเคราะห์คลิปเพิ่มครับ")
